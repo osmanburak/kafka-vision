@@ -121,10 +121,10 @@ export const translations = {
     loading: 'Loading...',
     refresh: 'Refresh',
     loadingUsers: 'Loading users...',
-    username: 'Username',
+    userTableUsername: 'Username',
     displayName: 'Display Name',
     email: 'Email',
-    status: 'Status',
+    userStatusLabel: 'Status',
     role: 'Role',
     lastLogin: 'Last Login',
     actions: 'Actions',
@@ -142,7 +142,6 @@ export const translations = {
     pendingApprovalTitle: 'Approval Pending',
     pendingApprovalMessage: 'Your account is pending approval from an administrator.',
     pendingApprovalInfo: 'An administrator will review your access request soon. You will be able to access the system once approved.',
-    logout: 'Logout',
     checkStatus: 'Check Status',
     checkingStatus: 'Checking...',
     selectLanguage: 'Select Language',
@@ -150,7 +149,6 @@ export const translations = {
     confirmDeleteUser: 'Are you sure you want to delete user {{username}}? This action cannot be undone.',
     restartRequiredMessage: 'The application needs to restart to apply the changes. Click Restart to reload the page.',
     restart: 'Restart',
-    cancel: 'Cancel',
     confirm: 'Confirm'
   },
   tr: {
@@ -273,10 +271,10 @@ export const translations = {
     loading: 'Yükleniyor...',
     refresh: 'Yenile',
     loadingUsers: 'Kullanıcılar yükleniyor...',
-    username: 'Kullanıcı Adı',
+    userTableUsername: 'Kullanıcı Adı',
     displayName: 'Görünen Ad',
     email: 'E-posta',
-    status: 'Durum',
+    userStatusLabel: 'Durum',
     role: 'Rol',
     lastLogin: 'Son Giriş',
     actions: 'İşlemler',
@@ -294,7 +292,6 @@ export const translations = {
     pendingApprovalTitle: 'Onay Bekliyor',
     pendingApprovalMessage: 'Hesabınız bir yönetici tarafından onaylanmayı bekliyor.',
     pendingApprovalInfo: 'Bir yönetici erişim talebinizi yakında inceleyecektir. Onaylandıktan sonra sisteme erişebileceksiniz.',
-    logout: 'Çıkış Yap',
     checkStatus: 'Durumu Kontrol Et',
     checkingStatus: 'Kontrol ediliyor...',
     selectLanguage: 'Dil Seçin',
@@ -302,10 +299,14 @@ export const translations = {
     confirmDeleteUser: '{{username}} kullanıcısını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.',
     restartRequiredMessage: 'Değişikliklerin uygulanması için uygulamanın yeniden başlatılması gerekiyor. Sayfayı yeniden yüklemek için Yeniden Başlat\'a tıklayın.',
     restart: 'Yeniden Başlat',
-    cancel: 'İptal',
     confirm: 'Onayla'
   }
 };
+
+// Type to exclude nested objects from translation keys
+type TranslationKeys = {
+  [K in keyof typeof translations.en]: typeof translations.en[K] extends string ? K : never;
+}[keyof typeof translations.en];
 
 export const useTranslation = (language: Language) => {
   const translateState = (state: string) => {
@@ -320,9 +321,14 @@ export const useTranslation = (language: Language) => {
     return stateTranslations[state]?.[language] || state;
   };
 
+  const getUserStatusText = (status: string): string => {
+    const userStatus = translations[language].userStatus || translations.en.userStatus;
+    return (userStatus as any)[status] || status;
+  };
+
   return {
-    t: (key: keyof typeof translations.en, params?: Record<string, string>) => {
-      let text = translations[language][key] || translations.en[key];
+    t: (key: TranslationKeys, params?: Record<string, string>): string => {
+      let text = translations[language][key] as string || translations.en[key] as string;
       if (params) {
         Object.keys(params).forEach(param => {
           text = text.replace(new RegExp(`{{${param}}}`, 'g'), params[param]);
@@ -330,6 +336,7 @@ export const useTranslation = (language: Language) => {
       }
       return text;
     },
+    getUserStatusText,
     translateState,
     language
   };

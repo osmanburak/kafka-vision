@@ -12,6 +12,7 @@ interface ProfileMenuProps {
     uid: string;
     displayName: string;
     mail: string;
+    role?: string;
     isLocal?: boolean;
   };
   onLogout: () => void;

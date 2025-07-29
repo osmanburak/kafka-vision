@@ -11,6 +11,7 @@ interface AdminSettingsProps {
     uid: string;
     displayName: string;
     mail: string;
+    role?: string;
     isLocal?: boolean;
   } | null;
   onClose?: () => void;
@@ -41,7 +42,7 @@ interface User {
 }
 
 export default function AdminSettings({ language, user, onClose }: AdminSettingsProps) {
-  const { t } = useTranslation(language);
+  const { t, getUserStatusText } = useTranslation(language);
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   
   // Use external control if onClose is provided, otherwise use internal state
@@ -327,7 +328,7 @@ export default function AdminSettings({ language, user, onClose }: AdminSettings
         logger.error('Save failed:', errorText);
         
         try {
-          const error = JSON.parse(errorText);
+          const error = JSON.parse(errorText) as { message?: string };
           setMessage({ type: 'error', text: error.message || t('settingsError') });
         } catch {
           setMessage({ type: 'error', text: `HTTP ${response.status}: ${errorText}` });
@@ -335,7 +336,7 @@ export default function AdminSettings({ language, user, onClose }: AdminSettings
       }
     } catch (error) {
       logger.error('Save error:', error);
-      setMessage({ type: 'error', text: `Network error: ${error.message}` });
+      setMessage({ type: 'error', text: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}` });
     } finally {
       setLoading(false);
     }
@@ -359,7 +360,7 @@ export default function AdminSettings({ language, user, onClose }: AdminSettings
       if (response.ok) {
         setMessage({ type: 'success', text: t('ldapTestSuccess') });
       } else {
-        const error = await response.json();
+        const error = await response.json() as { message?: string };
         setMessage({ type: 'error', text: error.message || t('ldapTestError') });
       }
     } catch (error) {
@@ -574,10 +575,10 @@ export default function AdminSettings({ language, user, onClose }: AdminSettings
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-800/50 border-b dark:border-gray-700">
                           <tr>
-                            <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('username')}</th>
+                            <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('userTableUsername')}</th>
                             <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('displayName')}</th>
                             <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('email')}</th>
-                            <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('status')}</th>
+                            <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('userStatusLabel')}</th>
                             <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('role')}</th>
                             <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('lastLogin')}</th>
                             <th className="px-4 py-2 text-left font-medium text-gray-900 dark:text-gray-100">{t('actions')}</th>
@@ -596,7 +597,7 @@ export default function AdminSettings({ language, user, onClose }: AdminSettings
                                   'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
                                 }`}>
                                   {getStatusIcon(user.status)}
-                                  {t(`userStatus.${user.status}`)}
+                                  {getUserStatusText(user.status)}
                                 </span>
                               </td>
                               <td className="px-4 py-2">

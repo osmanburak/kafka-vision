@@ -8,6 +8,7 @@ interface User {
   displayName: string;
   mail: string;
   role?: string;
+  isLocal?: boolean;
 }
 
 interface AuthContextType {
