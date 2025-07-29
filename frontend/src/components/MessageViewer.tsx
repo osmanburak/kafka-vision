@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, FileText, Hash, Clock } from 'lucide-react';
 import { Language, useTranslation } from '@/lib/i18n';
 
@@ -27,11 +27,7 @@ export function MessageViewer({ topic, partition, currentOffset, latestOffset, o
   const [error, setError] = useState<string | null>(null);
   const { t } = useTranslation(language);
 
-  useEffect(() => {
-    fetchMessages();
-  }, [topic, partition, currentOffset, latestOffset]);
-
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -61,7 +57,11 @@ export function MessageViewer({ topic, partition, currentOffset, latestOffset, o
     } finally {
       setLoading(false);
     }
-  };
+  }, [topic, partition, currentOffset, latestOffset]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(parseInt(timestamp)).toLocaleString();
