@@ -33,6 +33,16 @@
 - Start scripts now automatically check and install missing dependencies
 - This prevents "module not found" errors and ensures smooth operation
 
+### 🏗️ **MANDATORY BUILD & CI/CD VERIFICATION**
+**ALWAYS VERIFY BUILD SUCCESS AND CI/CD READINESS**
+- After any code changes, run `npm run build` in frontend directory
+- Ensure TypeScript compilation succeeds with no errors
+- Verify ESLint passes with no errors (`npm run lint`)
+- Check that all Docker images build successfully
+- Confirm GitHub Actions workflows are present and valid
+- Test that the application starts without errors
+- This rule applies to ALL Claude sessions - no exceptions!
+
 ## Overview
 KafkaVision provides complete visibility into your Kafka clusters. A modern, real-time monitoring application built with Next.js 14 and Node.js. Offers comprehensive monitoring of Kafka clusters, topics, consumer groups, and real-time metrics with multilingual support.
 

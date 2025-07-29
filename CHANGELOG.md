@@ -5,6 +5,21 @@ All notable changes to the Kafka Status Monitor project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Documentation] - 2025-07-29
+
+### Added
+- **New Critical Rule in CLAUDE.md**: MANDATORY BUILD & CI/CD VERIFICATION
+  - Added rule to always verify `npm run build` succeeds after code changes
+  - Ensures TypeScript compilation and ESLint checks pass
+  - Verifies Docker images build successfully
+  - Confirms CI/CD pipeline readiness
+  - Prevents deployment failures by catching issues early
+  
+**Files Modified:**
+- `CLAUDE.md` - Added new mandatory rule section for build and CI/CD verification
+
+**Impact:** All future development sessions must verify build success before considering work complete
+
 ## [GitHub Ready] - 2025-07-29
 
 ### Added
