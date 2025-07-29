@@ -1,0 +1,21 @@
+# Node modules
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+
+# Session files - persistent but not committed
+sessions/
+
+# Data files
+data/
+
+# OS generated files
+.DS_Store
+Thumbs.db
