@@ -225,8 +225,8 @@ const authenticateLDAP = (username, password) => {
           // Try multiple DN formats for Active Directory
           const dnFormats = [
             finalDN, // Original DN from LDAP search
-            `${username}@arvento.com`, // UPN format
-            `ARVENTO\\${username}`, // DOMAIN\user format
+            `${username}@${process.env.LDAP_DOMAIN || 'example.com'}`, // UPN format
+            `${process.env.LDAP_DOMAIN_SHORT || 'DOMAIN'}\\${username}`, // DOMAIN\user format
             username // Simple username
           ].filter(dn => dn && dn.trim() !== ''); // Remove empty or null DNs
           
@@ -269,7 +269,7 @@ const authenticateLDAP = (username, password) => {
                 const userResult = {
                   uid: userInfo.sAMAccountName || userInfo.uid || username,
                   displayName: userInfo.displayName || userInfo.cn || username,
-                  mail: userInfo.mail || `${username}@arvento.com`,
+                  mail: userInfo.mail || `${username}@${process.env.LDAP_DOMAIN || 'example.com'}`,
                   isLocal: false
                 };
                 
