@@ -201,23 +201,20 @@ kafka-vision/
 
 ## 📊 Screenshots
 
-> **Note**: To add real screenshots, follow these steps:
-> 1. Start the application (`start.bat` or `start.sh`)
-> 2. Take screenshots of the dashboard, dark mode, and admin settings
-> 3. Upload to GitHub by creating an issue, dragging images, copying URLs
-> 4. Replace the placeholder URLs below
-
 ### Dashboard (Light Mode)
 Shows real-time Kafka cluster monitoring with topics, consumer groups, and statistics.
-![Dashboard Light](https://github.com/osmanburak/kafka-vision/assets/YOUR_USER_ID/YOUR_IMAGE_ID)
+
+![Dashboard Light Mode](./docs/images/dashboard-light.png)
 
 ### Dashboard (Dark Mode)
 Full dark theme support for comfortable viewing in low-light environments.
-![Dashboard Dark](https://github.com/osmanburak/kafka-vision/assets/YOUR_USER_ID/YOUR_IMAGE_ID)
+
+![Dashboard Dark Mode](./docs/images/dashboard-dark.png)
 
 ### Admin Settings
 Web-based configuration for LDAP settings and user management.
-![Admin Settings](https://github.com/osmanburak/kafka-vision/assets/YOUR_USER_ID/YOUR_IMAGE_ID)
+
+![Admin Settings](./docs/images/admin-settings.png)
 
 ## 🤝 Contributing
 

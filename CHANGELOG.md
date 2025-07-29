@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added screenshot guide (`docs/SCREENSHOT_GUIDE.md`) with detailed instructions
   - Updated README.md with proper screenshot placeholders and upload instructions
   - Specified requirements for dashboard (light/dark) and admin settings screenshots
+  - Fixed 404 errors by linking to actual screenshot images in docs/images/
+  - Screenshots show: dashboard light mode, dashboard dark mode, and admin settings panel
   
 **Files Modified:**
 - `CLAUDE.md` - Added new mandatory rule section for build and CI/CD verification
