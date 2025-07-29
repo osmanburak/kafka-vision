@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Server, Database, Users, Activity, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Server, Database, Users, Activity, AlertCircle, Wifi, WifiOff, Search, X } from 'lucide-react';
 import { StatusCard } from '@/components/StatusCard';
 import { TopicDetails } from '@/components/TopicDetails';
 import { ConsumerGroupDetails } from '@/components/ConsumerGroupDetails';
@@ -49,6 +49,7 @@ export default function Home() {
   const [panelOrder, setPanelOrder] = useState(['topics', 'consumerGroups']);
   const [showConnectionManager, setShowConnectionManager] = useState(false);
   const [currentConnection, setCurrentConnection] = useState<any>(null);
+  const [topicSearchQuery, setTopicSearchQuery] = useState('');
   const { t } = useTranslation(language);
   const { user, isLoading, pendingApproval, pendingMessage, authEnabled, login, logout, checkApprovalStatus } = useAuth();
 
@@ -280,10 +281,18 @@ export default function Home() {
     }
   }, []);
 
-  // Filter and sort topics based on showBehindOnly state and favorites
-  const filteredTopics = showBehindOnly 
-    ? (status.topics || []).filter(topic => topic.remainingMessages && topic.remainingMessages > 0)
-    : (status.topics || []);
+  // Filter and sort topics based on showBehindOnly state, search query, and favorites
+  const filteredTopics = (status.topics || []).filter(topic => {
+    // Apply search filter
+    if (topicSearchQuery && !topic.name.toLowerCase().includes(topicSearchQuery.toLowerCase())) {
+      return false;
+    }
+    // Apply behind only filter
+    if (showBehindOnly && (!topic.remainingMessages || topic.remainingMessages === 0)) {
+      return false;
+    }
+    return true;
+  });
   
   // Sort topics with favorites first
   const sortedTopics = [...filteredTopics].sort((a, b) => {
@@ -431,16 +440,22 @@ export default function Home() {
                         <StatusCard title={panel.title} icon={panel.icon}>
                           {panelId === 'topics' && (
                             <div className="min-h-[400px] flex flex-col">
-                              <div className="mb-3 flex justify-between items-center">
-                                <span className="font-semibold text-lg">
-                                  {showBehindOnly ? filteredTopics.length : (status.totalTopics || status.topics.length)} {t('topics')}
-                                  {!showBehindOnly && status.totalTopics && status.totalTopics > status.topics.length && (
-                                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showing')} {status.topics.length})</span>
-                                  )}
-                                  {showBehindOnly && (
-                                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showBehind').toLowerCase()})</span>
-                                  )}
-                                </span>
+                              <div className="mb-3 space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-semibold text-lg">
+                                    {filteredTopics.length} {t('topics')}
+                                    {topicSearchQuery && (
+                                      <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">
+                                        ({t('filtered')})
+                                      </span>
+                                    )}
+                                    {!showBehindOnly && status.totalTopics && status.totalTopics > status.topics.length && (
+                                      <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showing')} {status.topics.length})</span>
+                                    )}
+                                    {showBehindOnly && !topicSearchQuery && (
+                                      <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showBehind').toLowerCase()})</span>
+                                    )}
+                                  </span>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-gray-600 dark:text-gray-400">{t('showBehind')}</span>
                                   <button
@@ -458,7 +473,26 @@ export default function Home() {
                                   </button>
                                 </div>
                               </div>
-                              <div className="max-h-[350px] overflow-y-auto pr-2 flex-1">
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  placeholder={t('searchTopics')}
+                                  value={topicSearchQuery}
+                                  onChange={(e) => setTopicSearchQuery(e.target.value)}
+                                  className="w-full px-3 py-1.5 pl-9 text-sm border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                                <Search className="absolute left-2.5 top-2 w-4 h-4 text-gray-400" />
+                                {topicSearchQuery && (
+                                  <button
+                                    onClick={() => setTopicSearchQuery('')}
+                                    className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="max-h-[350px] overflow-y-auto pr-2 flex-1 mt-3">
                                 {sortedTopics.map(topic => (
                                   <TopicDetails 
                                     key={topic.name} 

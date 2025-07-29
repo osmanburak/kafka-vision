@@ -5,6 +5,24 @@ All notable changes to the Kafka Status Monitor project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Feature] - 2025-07-29
+
+### Added
+- **Topic Search/Filter Functionality**:
+  - Added search box in Topics panel to filter topics by name
+  - Real-time filtering as user types
+  - Clear button (X) to reset search
+  - Search icon for better UX
+  - Updates topic count to show filtered results
+  - Works in combination with "Show Behind Only" filter
+  - Bilingual support (English: "Search topics...", Turkish: "Topic ara...")
+  
+**Files Modified:**
+- `frontend/src/app/page.tsx` - Added search state, filtering logic, and search UI
+- `frontend/src/lib/i18n.ts` - Added translations for searchTopics and filtered
+
+**Impact:** Users can now quickly find specific topics in large Kafka clusters
+
 ## [Documentation] - 2025-07-29
 
 ### Added
