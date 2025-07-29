@@ -12,10 +12,12 @@ yarn-error.log*
 
 # Environment variables (contain sensitive information)
 .env
+.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.ad-options
 
 # Runtime data
 pids
