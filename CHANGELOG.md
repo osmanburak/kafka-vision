@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed redundant translation keys to resolve compilation error
   - Build now completes successfully without TypeScript errors
 
+- **Message Viewer Eye Icon Missing for Unconsumed Partitions**
+  - Fixed issue where eye icon to view messages was not shown for partitions with "No msgs" current offset
+  - Changed condition from `lag > 0` to `!isEmptyPartition` to show eye icon whenever partition has messages
+  - Now allows viewing messages even when consumer has never consumed from partition (offset = -1)
+  - Enables viewing all available messages in partitions regardless of consumer state
+
+- **Incorrect Lag Calculation for Unconsumed Partitions**
+  - Fixed lag showing as 0 for partitions where consumer has never consumed but messages exist
+  - Added proper detection of never-consumed partitions (offset = -1)
+  - Lag now correctly shows total available messages when consumer has never consumed
+  - Example: Partition with 1 message and no consumption now shows lag = 1 (not 0)
+
 **Files Modified:**
 - `frontend/src/components/MessageComposer.tsx` (NEW) - Complete modal for message composition
 - `backend/server.js` - Added admin message producer endpoint with KafkaJS integration

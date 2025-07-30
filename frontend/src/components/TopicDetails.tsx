@@ -123,9 +123,10 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
               
               // Calculate lag: 
               // - If partition is empty (low = high), lag = 0
-              // - If there's a consumer, use the consumer's lag
-              // - If no consumer, lag = 0 (no one is consuming, so no lag)
-              const lag = isEmptyPartition ? 0 : (consumerInfo ? consumerInfo[1].lag : 0);
+              // - If consumer has consumed, use the consumer's lag
+              // - If consumer never consumed (offset = -1) or no consumer, lag = total messages
+              const hasNeverConsumed = rawCurrentOffset === '-1' || rawCurrentOffset === null;
+              const lag = isEmptyPartition ? 0 : (consumerInfo && !hasNeverConsumed ? consumerInfo[1].lag : parseInt(partition.high) - parseInt(partition.low));
               
               return (
                 <div key={partition.partition} className="text-sm grid grid-cols-8 gap-2 py-1 border-b border-gray-200 last:border-0">
@@ -141,7 +142,7 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
                     {consumerGroup.length > 8 ? consumerGroup.substring(0, 8) + '...' : consumerGroup}
                   </div>
                   <div>
-                    {lag > 0 && (
+                    {!isEmptyPartition && (
                       <button
                         onClick={() => setViewingMessages({
                           partition: partition.partition,
