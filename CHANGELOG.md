@@ -5,6 +5,37 @@ All notable changes to the Kafka Status Monitor project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Feature] - 2025-07-30
+
+### Added
+- **Admin Message Producer Feature for Kafka Topics**
+  - Admin users can now send messages directly to Kafka topics from the topic list
+  - New MessageComposer modal component with JSON validation and partition selection
+  - Backend endpoint `/api/admin/produce-message` with admin-only access control
+  - Features include:
+    - Message key (optional) and value (required) input fields
+    - Automatic partition selection or manual partition specification
+    - JSON syntax validation when content appears to be JSON
+    - Success feedback showing partition and offset details
+    - Error handling with detailed error messages
+  - Integrates directly into topic list with Send button for quick access
+  - Complete bilingual support (English/Turkish) for all UI elements
+
+### Fixed
+- **TypeScript Build Error from Duplicate Translation Keys**
+  - Fixed duplicate 'offset' key in translations file at lines 67/77 (English) and 234/244 (Turkish)
+  - Removed redundant translation keys to resolve compilation error
+  - Build now completes successfully without TypeScript errors
+
+**Files Modified:**
+- `frontend/src/components/MessageComposer.tsx` (NEW) - Complete modal for message composition
+- `backend/server.js` - Added admin message producer endpoint with KafkaJS integration
+- `frontend/src/lib/i18n.ts` - Added message producer translations and fixed duplicate keys
+- `frontend/src/components/TopicDetails.tsx` - Integrated Send button and MessageComposer
+- `frontend/src/app/page.tsx` - Updated to pass authentication props
+
+**Impact:** Admin users can now produce messages to Kafka topics directly from the monitoring interface, providing comprehensive Kafka management capabilities
+
 ## [Feature] - 2025-07-29
 
 ### Added

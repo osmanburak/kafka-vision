@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info, Eye, Star } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, Eye, Star, Send } from 'lucide-react';
 import { Topic } from '@/lib/types';
 import { Language, useTranslation } from '@/lib/i18n';
 import { MessageViewer } from './MessageViewer';
+import { MessageComposer } from './MessageComposer';
 
 interface TopicDetailsProps {
   topic: Topic;
@@ -12,12 +13,18 @@ interface TopicDetailsProps {
   darkMode?: boolean;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  user?: any;
+  authEnabled?: boolean;
 }
 
-export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite }: TopicDetailsProps) {
+export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite, user, authEnabled }: TopicDetailsProps) {
   const [expanded, setExpanded] = useState(false);
   const [viewingMessages, setViewingMessages] = useState<{ partition: number; current: string; latest: string } | null>(null);
+  const [showMessageComposer, setShowMessageComposer] = useState(false);
   const { t } = useTranslation(language);
+  
+  // Check if user is admin
+  const isAdmin = user && (user.role === 'admin' || (user.isLocal && user.uid === 'admin'));
   
   return (
     <div className="py-2 border-b border-gray-200 dark:border-gray-700 last:border-0">
@@ -66,7 +73,19 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
             )}
           </div>
         </div>
-        <div className="ml-2 dark:text-gray-300">
+        <div className="ml-2 flex items-center gap-2 dark:text-gray-300">
+          {authEnabled && isAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMessageComposer(true);
+              }}
+              className="p-1 text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors"
+              title={t('sendMessage')}
+            >
+              <Send size={14} />
+            </button>
+          )}
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </div>
@@ -164,6 +183,15 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
           language={language}
         />
       )}
+      
+      <MessageComposer
+        isOpen={showMessageComposer}
+        onClose={() => setShowMessageComposer(false)}
+        topicName={topic.name}
+        language={language}
+        authEnabled={authEnabled || false}
+        isAdmin={isAdmin || false}
+      />
     </div>
   );
 }

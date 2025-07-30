@@ -1012,6 +1012,87 @@ app.put('/api/admin/users/:username/role', isAdmin, async (req, res) => {
   }
 });
 
+// Message Producer endpoint (admin only)
+app.post('/api/admin/produce-message', isAdmin, async (req, res) => {
+  try {
+    const { topic, key, value, partition } = req.body;
+    
+    // Validate required fields
+    if (!topic || !value) {
+      return res.status(400).json({ error: 'Topic and value are required' });
+    }
+    
+    // Validate topic name (basic validation)
+    if (typeof topic !== 'string' || topic.trim().length === 0) {
+      return res.status(400).json({ error: 'Invalid topic name' });
+    }
+    
+    // Validate partition if provided
+    if (partition !== null && partition !== undefined) {
+      if (!Number.isInteger(partition) || partition < 0) {
+        return res.status(400).json({ error: 'Invalid partition number' });
+      }
+    }
+    
+    logger.info('Admin producing message:', { 
+      user: req.user.uid, 
+      topic, 
+      hasKey: !!key, 
+      valueLength: value.length,
+      partition: partition || 'auto'
+    });
+    
+    // Prepare message
+    const message = {
+      key: key || null,
+      value: value,
+      timestamp: Date.now().toString()
+    };
+    
+    // Add partition if specified
+    const produceOptions = {
+      topic,
+      messages: [message]
+    };
+    
+    if (partition !== null && partition !== undefined) {
+      message.partition = partition;
+    }
+    
+    // Produce the message
+    const producer = kafka.producer();
+    await producer.connect();
+    
+    const result = await producer.send(produceOptions);
+    
+    await producer.disconnect();
+    
+    // Return success with metadata
+    const metadata = result[0];
+    res.json({
+      success: true,
+      partition: metadata.partition,
+      offset: metadata.baseOffset,
+      timestamp: metadata.timestamp,
+      topic: topic
+    });
+    
+    logger.info('Message produced successfully:', { 
+      user: req.user.uid,
+      topic,
+      partition: metadata.partition,
+      offset: metadata.baseOffset
+    });
+    
+  } catch (error) {
+    logger.error('Error producing message:', error);
+    res.status(500).json({ 
+      error: 'Failed to produce message',
+      details: error.message 
+    });
+  }
+});
+
 // API Routes (protected)
 app.get('/api/status', isAuthenticated, async (req, res) => {
   try {

@@ -501,6 +501,8 @@ export default function Home() {
                                     darkMode={darkMode}
                                     isFavorite={favoriteTopics.includes(topic.name)}
                                     onToggleFavorite={() => toggleFavorite(topic.name)}
+                                    user={user}
+                                    authEnabled={authEnabled}
                                   />
                                 ))}
                                 {showBehindOnly && filteredTopics.length === 0 && (
