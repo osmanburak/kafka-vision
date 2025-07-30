@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Lag now correctly shows total available messages when consumer has never consumed
   - Example: Partition with 1 message and no consumption now shows lag = 1 (not 0)
 
+- **Security: Restricted Connection Manager Access to Admins Only**
+  - Fixed issue where LDAP users with "user" role could access Connection Manager
+  - Connection Manager is now restricted to admin users only (admin role + auth enabled)
+  - Regular users can only access Settings panel for language/refresh rate changes
+  - Maintains proper role-based access control in authenticated environments
+
 **Files Modified:**
 - `frontend/src/components/MessageComposer.tsx` (NEW) - Complete modal for message composition
 - `backend/server.js` - Added admin message producer endpoint with KafkaJS integration

@@ -133,17 +133,19 @@ export default function ProfileMenu({
                 {t('settings')}
               </button>
 
-              {/* Connection Manager - Always available for switching Kafka clusters */}
-              <button
-                onClick={() => {
-                  onShowConnectionManager();
-                  setIsOpen(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
-              >
-                <Server size={16} className="text-green-600 dark:text-green-400" />
-                {t('connectionManager')}
-              </button>
+              {/* Connection Manager - Only for admin users when auth is enabled */}
+              {isAdmin && authEnabled && (
+                <button
+                  onClick={() => {
+                    onShowConnectionManager();
+                    setIsOpen(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3"
+                >
+                  <Server size={16} className="text-green-600 dark:text-green-400" />
+                  {t('connectionManager')}
+                </button>
+              )}
 
               {/* Admin Settings - Only for admin users when auth is enabled */}
               {isAdmin && authEnabled && (
