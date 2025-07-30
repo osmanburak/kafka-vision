@@ -111,8 +111,14 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
             
             {/* Data rows */}
             {topic.partitionDetails.map((partition) => {
-              // Get the first consumer group's offset info for this partition
-              const consumerInfo = partition.consumerOffsets ? Object.entries(partition.consumerOffsets)[0] : null;
+              // Get the most active consumer group (highest current offset) for this partition
+              const consumerInfo = partition.consumerOffsets ? 
+                Object.entries(partition.consumerOffsets).reduce((mostActive, [groupId, offsetInfo]) => {
+                  if (!mostActive) return [groupId, offsetInfo];
+                  const currentOffset = parseInt(offsetInfo.currentOffset) || -1;
+                  const mostActiveOffset = parseInt(mostActive[1].currentOffset) || -1;
+                  return currentOffset > mostActiveOffset ? [groupId, offsetInfo] : mostActive;
+                }, null as [string, any] | null) : null;
               const rawCurrentOffset = consumerInfo ? consumerInfo[1].currentOffset : null;
               const currentOffset = rawCurrentOffset === '-1' ? t('noMessages') : (rawCurrentOffset || 'N/A');
               const consumerGroup = consumerInfo ? consumerInfo[0] : t('none');
@@ -142,7 +148,7 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
                     {consumerGroup.length > 8 ? consumerGroup.substring(0, 8) + '...' : consumerGroup}
                   </div>
                   <div>
-                    {!isEmptyPartition && (
+                    {lag > 0 && (
                       <button
                         onClick={() => setViewingMessages({
                           partition: partition.partition,
