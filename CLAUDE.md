@@ -43,6 +43,14 @@
 - Test that the application starts without errors
 - This rule applies to ALL Claude sessions - no exceptions!
 
+### 🔌 **API ENDPOINT RULES**
+**ALWAYS USE CORRECT BACKEND PORT FOR API CALLS**
+- ALL API calls from frontend MUST use the backend URL: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}`
+- NEVER make API calls to the frontend port (3000)
+- ALWAYS include `credentials: 'include'` for authenticated endpoints
+- Example: `fetch('${process.env.NEXT_PUBLIC_API_URL}/api/admin/create-topic', { credentials: 'include' })`
+- This rule applies to ALL Claude sessions - no exceptions!
+
 ## Overview
 KafkaVision provides complete visibility into your Kafka clusters. A modern, real-time monitoring application built with Next.js 14 and Node.js. Offers comprehensive monitoring of Kafka clusters, topics, consumer groups, and real-time metrics with multilingual support.
 

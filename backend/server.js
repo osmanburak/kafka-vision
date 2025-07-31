@@ -1093,6 +1093,262 @@ app.post('/api/admin/produce-message', isAdmin, async (req, res) => {
   }
 });
 
+// Topic Creator endpoint (admin only)
+app.post('/api/admin/create-topic', isAdmin, async (req, res) => {
+  try {
+    const { topicName, partitions, replicationFactor } = req.body;
+    
+    // Validate required fields
+    if (!topicName || !partitions || !replicationFactor) {
+      return res.status(400).json({ error: 'Topic name, partitions, and replication factor are required' });
+    }
+    
+    // Validate topic name format
+    const topicNameRegex = /^[a-zA-Z0-9._-]+$/;
+    if (typeof topicName !== 'string' || !topicNameRegex.test(topicName.trim())) {
+      return res.status(400).json({ error: 'Invalid topic name. Use only letters, numbers, dots, underscores, and hyphens.' });
+    }
+    
+    // Validate partitions
+    if (!Number.isInteger(partitions) || partitions < 1 || partitions > 100) {
+      return res.status(400).json({ error: 'Partitions must be an integer between 1 and 100' });
+    }
+    
+    // Validate replication factor
+    if (!Number.isInteger(replicationFactor) || replicationFactor < 1 || replicationFactor > 10) {
+      return res.status(400).json({ error: 'Replication factor must be an integer between 1 and 10' });
+    }
+    
+    logger.info('Admin creating topic:', { 
+      user: req.user.uid, 
+      topicName: topicName.trim(), 
+      partitions,
+      replicationFactor
+    });
+    
+    // Create Kafka admin client
+    const admin = kafka.admin();
+    await admin.connect();
+    
+    try {
+      // Check if topic already exists
+      const existingTopics = await admin.listTopics();
+      if (existingTopics.includes(topicName.trim())) {
+        await admin.disconnect();
+        return res.status(409).json({ error: 'Topic already exists' });
+      }
+      
+      // Create the topic
+      await admin.createTopics({
+        topics: [{
+          topic: topicName.trim(),
+          numPartitions: partitions,
+          replicationFactor: replicationFactor,
+          configEntries: [
+            { name: 'cleanup.policy', value: 'delete' },
+            { name: 'retention.ms', value: '604800000' } // 7 days
+          ]
+        }]
+      });
+      
+      await admin.disconnect();
+      
+      res.json({
+        success: true,
+        topic: topicName.trim(),
+        partitions,
+        replicationFactor
+      });
+      
+      logger.info('Topic created successfully:', { 
+        user: req.user.uid,
+        topic: topicName.trim(),
+        partitions,
+        replicationFactor
+      });
+      
+    } catch (adminError) {
+      await admin.disconnect();
+      throw adminError;
+    }
+    
+  } catch (error) {
+    logger.error('Error creating topic:', error);
+    
+    // Handle specific Kafka errors
+    if (error.message && error.message.includes('already exists')) {
+      res.status(409).json({ error: 'Topic already exists' });
+    } else if (error.message && error.message.includes('replication factor')) {
+      res.status(400).json({ error: 'Invalid replication factor for this cluster' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to create topic',
+        details: error.message 
+      });
+    }
+  }
+});
+
+// Topic Deletion endpoint (admin only)
+app.delete('/api/admin/delete-topic', isAdmin, async (req, res) => {
+  try {
+    const { topicName } = req.body;
+    
+    // Validate required fields
+    if (!topicName) {
+      return res.status(400).json({ error: 'Topic name is required' });
+    }
+    
+    // Validate topic name format
+    const topicNameRegex = /^[a-zA-Z0-9._-]+$/;
+    if (typeof topicName !== 'string' || !topicNameRegex.test(topicName.trim())) {
+      return res.status(400).json({ error: 'Invalid topic name format' });
+    }
+    
+    // Prevent deletion of system topics
+    if (topicName.startsWith('__')) {
+      return res.status(403).json({ error: 'Cannot delete system topics' });
+    }
+    
+    logger.info('Admin deleting topic:', { 
+      user: req.user.uid, 
+      topicName: topicName.trim()
+    });
+    
+    // Create Kafka admin client
+    const admin = kafka.admin();
+    await admin.connect();
+    
+    try {
+      // Check if topic exists
+      const existingTopics = await admin.listTopics();
+      if (!existingTopics.includes(topicName.trim())) {
+        await admin.disconnect();
+        return res.status(404).json({ error: 'Topic not found' });
+      }
+      
+      // Delete the topic
+      await admin.deleteTopics({
+        topics: [topicName.trim()],
+        timeout: 30000
+      });
+      
+      await admin.disconnect();
+      
+      res.json({
+        success: true,
+        topic: topicName.trim(),
+        message: 'Topic deleted successfully'
+      });
+      
+      logger.info('Topic deleted successfully:', { 
+        user: req.user.uid,
+        topic: topicName.trim()
+      });
+      
+    } catch (adminError) {
+      await admin.disconnect();
+      throw adminError;
+    }
+    
+  } catch (error) {
+    logger.error('Error deleting topic:', error);
+    
+    // Handle specific Kafka errors
+    if (error.message && error.message.includes('not found')) {
+      res.status(404).json({ error: 'Topic not found' });
+    } else if (error.message && error.message.includes('timeout')) {
+      res.status(408).json({ error: 'Delete operation timed out' });
+    } else if (error.message && error.message.includes('UnknownTopicOrPartition')) {
+      res.status(404).json({ error: 'Topic not found' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to delete topic',
+        details: error.message 
+      });
+    }
+  }
+});
+
+// Batch Message Producer endpoint (admin only)
+app.post('/api/admin/produce-messages', isAdmin, async (req, res) => {
+  try {
+    const { topic, messages } = req.body;
+    
+    // Validate required fields
+    if (!topic || !messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Topic and messages array are required' });
+    }
+    
+    // Validate topic name
+    if (typeof topic !== 'string' || topic.trim().length === 0) {
+      return res.status(400).json({ error: 'Invalid topic name' });
+    }
+    
+    // Validate message count
+    if (messages.length > 1000) {
+      return res.status(400).json({ error: 'Too many messages. Maximum 1000 messages per batch' });
+    }
+    
+    logger.info('Admin producing batch messages:', { 
+      user: req.user.uid, 
+      topic, 
+      messageCount: messages.length
+    });
+    
+    // Prepare messages for Kafka
+    const kafkaMessages = messages.map(msg => ({
+      key: msg.key || null,
+      value: msg.value,
+      partition: msg.partition !== undefined ? msg.partition : undefined,
+      timestamp: Date.now().toString()
+    }));
+    
+    // Connect producer
+    const producer = kafka.producer();
+    await producer.connect();
+    
+    try {
+      // Send messages in batch
+      const result = await producer.sendBatch({
+        topicMessages: [{
+          topic: topic.trim(),
+          messages: kafkaMessages
+        }]
+      });
+      
+      await producer.disconnect();
+      
+      // Count successful messages - the result is an array of results per topic
+      const successCount = messages.length; // All messages sent if no error thrown
+      
+      res.json({
+        success: true,
+        successCount: successCount,
+        topic: topic,
+        message: `Successfully sent ${successCount} messages`
+      });
+      
+      logger.info('Batch messages produced successfully:', { 
+        user: req.user.uid,
+        topic,
+        successCount
+      });
+      
+    } catch (producerError) {
+      await producer.disconnect();
+      throw producerError;
+    }
+    
+  } catch (error) {
+    logger.error('Error producing batch messages:', error);
+    res.status(500).json({ 
+      error: 'Failed to produce messages',
+      details: error.message 
+    });
+  }
+});
+
 // API Routes (protected)
 app.get('/api/status', isAuthenticated, async (req, res) => {
   try {

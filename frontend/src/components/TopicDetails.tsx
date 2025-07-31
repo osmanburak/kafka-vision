@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info, Eye, Star, Send } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, Eye, Star, Send, Trash2 } from 'lucide-react';
 import { Topic } from '@/lib/types';
 import { Language, useTranslation } from '@/lib/i18n';
 import { MessageViewer } from './MessageViewer';
@@ -15,9 +15,10 @@ interface TopicDetailsProps {
   onToggleFavorite?: () => void;
   user?: any;
   authEnabled?: boolean;
+  onDeleteTopic?: (topicName: string) => void;
 }
 
-export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite, user, authEnabled }: TopicDetailsProps) {
+export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite, user, authEnabled, onDeleteTopic }: TopicDetailsProps) {
   const [expanded, setExpanded] = useState(false);
   const [viewingMessages, setViewingMessages] = useState<{ partition: number; current: string; latest: string } | null>(null);
   const [showMessageComposer, setShowMessageComposer] = useState(false);
@@ -75,16 +76,30 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
         </div>
         <div className="ml-2 flex items-center gap-2 dark:text-gray-300">
           {authEnabled && isAdmin && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMessageComposer(true);
-              }}
-              className="p-1 text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors"
-              title={t('sendMessage')}
-            >
-              <Send size={14} />
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMessageComposer(true);
+                }}
+                className="p-1 text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors"
+                title={t('sendMessage')}
+              >
+                <Send size={14} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onDeleteTopic) {
+                    onDeleteTopic(topic.name);
+                  }
+                }}
+                className="p-1 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                title={t('deleteTopic')}
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
           )}
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
@@ -113,12 +128,12 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
             {topic.partitionDetails.map((partition) => {
               // Get the most active consumer group (highest current offset) for this partition
               const consumerInfo = partition.consumerOffsets ? 
-                Object.entries(partition.consumerOffsets).reduce((mostActive, [groupId, offsetInfo]) => {
+                Object.entries(partition.consumerOffsets).reduce<[string, any] | null>((mostActive, [groupId, offsetInfo]) => {
                   if (!mostActive) return [groupId, offsetInfo];
                   const currentOffset = parseInt(offsetInfo.currentOffset) || -1;
                   const mostActiveOffset = parseInt(mostActive[1].currentOffset) || -1;
                   return currentOffset > mostActiveOffset ? [groupId, offsetInfo] : mostActive;
-                }, null as [string, any] | null) : null;
+                }, null) : null;
               const rawCurrentOffset = consumerInfo ? consumerInfo[1].currentOffset : null;
               const currentOffset = rawCurrentOffset === '-1' ? t('noMessages') : (rawCurrentOffset || 'N/A');
               const consumerGroup = consumerInfo ? consumerInfo[0] : t('none');

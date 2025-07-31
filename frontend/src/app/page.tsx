@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Server, Database, Users, Activity, AlertCircle, Wifi, WifiOff, Search, X } from 'lucide-react';
+import { Server, Database, Users, Activity, AlertCircle, Wifi, WifiOff, Search, X, Plus } from 'lucide-react';
 import { StatusCard } from '@/components/StatusCard';
 import { TopicDetails } from '@/components/TopicDetails';
 import { ConsumerGroupDetails } from '@/components/ConsumerGroupDetails';
@@ -9,6 +9,8 @@ import { Settings } from '@/components/Settings';
 import { ConnectionManager } from '@/components/ConnectionManager';
 import { DraggableStatsCard } from '@/components/DraggableStatsCard';
 import { DraggablePanel } from '@/components/DraggablePanel';
+import { TopicCreator } from '@/components/TopicCreator';
+import { DeleteTopicConfirmation } from '@/components/DeleteTopicConfirmation';
 import Login from '@/components/Login';
 import ProfileMenu from '@/components/ProfileMenu';
 import PendingApproval from '@/components/PendingApproval';
@@ -48,6 +50,9 @@ export default function Home() {
   const [cardOrder, setCardOrder] = useState(['totalMessages', 'consumed', 'remaining', 'connection']);
   const [panelOrder, setPanelOrder] = useState(['topics', 'consumerGroups']);
   const [showConnectionManager, setShowConnectionManager] = useState(false);
+  const [showTopicCreator, setShowTopicCreator] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [topicToDelete, setTopicToDelete] = useState<string>('');
   const [currentConnection, setCurrentConnection] = useState<any>(null);
   const [topicSearchQuery, setTopicSearchQuery] = useState('');
   const { t } = useTranslation(language);
@@ -220,6 +225,21 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to change connection:', error);
     }
+  };
+
+  const handleDeleteTopic = (topicName: string) => {
+    setTopicToDelete(topicName);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteConfirmed = () => {
+    // Force refresh status after topic deletion
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('requestStatus');
+    }
+    setShowDeleteConfirmation(false);
+    setTopicToDelete('');
   };
 
   const handleDragEnd = (event: any) => {
@@ -439,8 +459,8 @@ export default function Home() {
                       <div className={panel.colSpan}>
                         <StatusCard title={panel.title} icon={panel.icon}>
                           {panelId === 'topics' && (
-                            <div className="min-h-[400px] flex flex-col">
-                              <div className="mb-3 space-y-2">
+                            <div className="flex flex-col h-[500px]">
+                              <div className="mb-3 space-y-2 flex-shrink-0">
                                 <div className="flex justify-between items-center">
                                   <span className="font-semibold text-lg">
                                     {filteredTopics.length} {t('topics')}
@@ -456,6 +476,17 @@ export default function Home() {
                                       <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showBehind').toLowerCase()})</span>
                                     )}
                                   </span>
+                                  {authEnabled && user && (user.role === 'admin' || (user.isLocal && user.uid === 'admin')) && (
+                                    <button
+                                      onClick={() => setShowTopicCreator(true)}
+                                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                      title={t('createTopic')}
+                                    >
+                                      <Plus size={16} />
+                                      {t('createTopic')}
+                                    </button>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-xs text-gray-600 dark:text-gray-400">{t('showBehind')}</span>
                                   <button
@@ -473,7 +504,7 @@ export default function Home() {
                                   </button>
                                 </div>
                               </div>
-                              <div className="relative">
+                              <div className="relative mb-3 flex-shrink-0">
                                 <input
                                   type="text"
                                   placeholder={t('searchTopics')}
@@ -491,8 +522,7 @@ export default function Home() {
                                   </button>
                                 )}
                               </div>
-                            </div>
-                            <div className="max-h-[350px] overflow-y-auto pr-2 flex-1 mt-3">
+                              <div className="flex-1 overflow-y-auto pr-2 min-h-0">
                                 {sortedTopics.map(topic => (
                                   <TopicDetails 
                                     key={topic.name} 
@@ -503,6 +533,7 @@ export default function Home() {
                                     onToggleFavorite={() => toggleFavorite(topic.name)}
                                     user={user}
                                     authEnabled={authEnabled}
+                                    onDeleteTopic={handleDeleteTopic}
                                   />
                                 ))}
                                 {showBehindOnly && filteredTopics.length === 0 && (
@@ -515,14 +546,14 @@ export default function Home() {
                             </div>
                           )}
                           {panelId === 'consumerGroups' && (
-                            <div className="min-h-[400px] flex flex-col">
-                              <div className="mb-3 font-semibold text-lg">
+                            <div className="flex flex-col h-[500px]">
+                              <div className="mb-3 font-semibold text-lg flex-shrink-0">
                                 {status.totalGroups || (status.consumerGroups || []).length} {t('groups')}
                                 {status.totalGroups && status.totalGroups > (status.consumerGroups || []).length && (
                                   <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 font-normal">({t('showing')} {(status.consumerGroups || []).length})</span>
                                 )}
                               </div>
-                              <div className="max-h-[350px] overflow-y-auto pr-2 flex-1">
+                              <div className="flex-1 overflow-y-auto pr-2 min-h-0">
                                 {(status.consumerGroups || []).map(group => (
                                   <ConsumerGroupDetails key={group.groupId} group={group} language={language} />
                                 ))}
@@ -586,6 +617,36 @@ export default function Home() {
         onConnectionChange={handleConnectionChange}
         language={language}
         darkMode={darkMode}
+      />
+
+      {/* Topic Creator Modal */}
+      <TopicCreator
+        isOpen={showTopicCreator}
+        onClose={() => setShowTopicCreator(false)}
+        language={language}
+        authEnabled={authEnabled}
+        isAdmin={user && (user.role === 'admin' || (user.isLocal && user.uid === 'admin')) || false}
+        onTopicCreated={() => {
+          // Force refresh status after topic creation
+          const socket = getSocket();
+          if (socket) {
+            socket.emit('requestStatus');
+          }
+        }}
+      />
+
+      {/* Delete Topic Confirmation Modal */}
+      <DeleteTopicConfirmation
+        isOpen={showDeleteConfirmation}
+        onClose={() => {
+          setShowDeleteConfirmation(false);
+          setTopicToDelete('');
+        }}
+        topicName={topicToDelete}
+        language={language}
+        authEnabled={authEnabled}
+        isAdmin={user && (user.role === 'admin' || (user.isLocal && user.uid === 'admin')) || false}
+        onConfirm={handleDeleteConfirmed}
       />
     </main>
   );
