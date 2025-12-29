@@ -5,6 +5,21 @@ All notable changes to the Kafka Status Monitor project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Docs] - 2025-12-29
+
+### Added
+- **DEPLOYMENT.md** - Step-by-step Windows server deployment guide
+  - Manual deployment without Docker
+  - Firewall configuration commands
+  - Environment setup for IP-based access
+  - PM2 service installation (optional)
+  - Troubleshooting section
+
+**Files Added:**
+- `DEPLOYMENT.md`
+
+---
+
 ## [Feature] - 2025-07-30
 
 ### Added
