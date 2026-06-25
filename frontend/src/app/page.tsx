@@ -301,23 +301,56 @@ export default function Home() {
     }
   }, []);
 
-  // Filter and sort topics based on showBehindOnly state, search query, and favorites
+  // Filter topics by search query first (used for the count label).
   const filteredTopics = (status.topics || []).filter(topic => {
-    // Apply search filter
     if (topicSearchQuery && !topic.name.toLowerCase().includes(topicSearchQuery.toLowerCase())) {
-      return false;
-    }
-    // Apply behind only filter
-    if (showBehindOnly && (!topic.remainingMessages || topic.remainingMessages === 0)) {
       return false;
     }
     return true;
   });
-  
-  // Sort topics with favorites first
-  const sortedTopics = [...filteredTopics].sort((a, b) => {
-    const aFav = favoriteTopics.includes(a.name);
-    const bFav = favoriteTopics.includes(b.name);
+
+  // Expand each topic into one row per attached consumer group (or a single row if no groups attach).
+  // Per-row lag is computed against that specific group so showBehindOnly filters at row granularity.
+  const computeGroupLag = (topic: typeof filteredTopics[number], groupId: string): number => {
+    if (!topic.partitionDetails) return 0;
+    let total = 0;
+    for (const p of topic.partitionDetails) {
+      const info = p.consumerOffsets?.[groupId];
+      const isEmpty = parseInt(p.low) === parseInt(p.high);
+      if (isEmpty) continue;
+      if (!info || info.currentOffset === '-1') {
+        total += parseInt(p.high) - parseInt(p.low);
+      } else {
+        total += info.lag;
+      }
+    }
+    return total;
+  };
+
+  type TopicRow = { topic: typeof filteredTopics[number]; groupId?: string; groupState?: string; rowLag: number };
+  const topicRows: TopicRow[] = [];
+  for (const topic of filteredTopics) {
+    const attachedGroupIds = new Set<string>();
+    for (const p of topic.partitionDetails || []) {
+      for (const gid of Object.keys(p.consumerOffsets || {})) {
+        attachedGroupIds.add(gid);
+      }
+    }
+    if (attachedGroupIds.size === 0) {
+      topicRows.push({ topic, rowLag: topic.remainingMessages ?? 0 });
+    } else {
+      Array.from(attachedGroupIds).forEach(gid => {
+        const state = (status.consumerGroups || []).find(g => g.groupId === gid)?.state;
+        topicRows.push({ topic, groupId: gid, groupState: state, rowLag: computeGroupLag(topic, gid) });
+      });
+    }
+  }
+
+  const filteredRows = topicRows.filter(row => !showBehindOnly || row.rowLag > 0);
+
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    const aFav = favoriteTopics.includes(a.topic.name);
+    const bFav = favoriteTopics.includes(b.topic.name);
     if (aFav && !bFav) return -1;
     if (!aFav && bFav) return 1;
     return 0;
@@ -434,7 +467,9 @@ export default function Home() {
         {status.error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center">
             <AlertCircle className="text-red-500 dark:text-red-400 mr-2" />
-            <span className="text-red-700 dark:text-red-300">{status.error}</span>
+            <span className="text-red-700 dark:text-red-300">
+              {status.error === 'KAFKA_RESPONSE_PARSE_ERROR' ? t('kafkaResponseParseError') : status.error}
+            </span>
           </div>
         )}
 
@@ -523,20 +558,22 @@ export default function Home() {
                                 )}
                               </div>
                               <div className="flex-1 overflow-y-auto pr-2 min-h-0">
-                                {sortedTopics.map(topic => (
-                                  <TopicDetails 
-                                    key={topic.name} 
-                                    topic={topic} 
+                                {sortedRows.map(row => (
+                                  <TopicDetails
+                                    key={`${row.topic.name}::${row.groupId || ''}`}
+                                    topic={row.topic}
                                     language={language}
                                     darkMode={darkMode}
-                                    isFavorite={favoriteTopics.includes(topic.name)}
-                                    onToggleFavorite={() => toggleFavorite(topic.name)}
+                                    isFavorite={favoriteTopics.includes(row.topic.name)}
+                                    onToggleFavorite={() => toggleFavorite(row.topic.name)}
                                     user={user}
                                     authEnabled={authEnabled}
                                     onDeleteTopic={handleDeleteTopic}
+                                    groupId={row.groupId}
+                                    groupState={row.groupState}
                                   />
                                 ))}
-                                {showBehindOnly && filteredTopics.length === 0 && (
+                                {showBehindOnly && sortedRows.length === 0 && (
                                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                                     <div className="text-sm">✓ {t('caughtUp')}</div>
                                     <div className="text-xs mt-1">{t('noTopicsBehind')}</div>

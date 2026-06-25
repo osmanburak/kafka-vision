@@ -99,6 +99,23 @@ function createAdmin() {
   return kafka.admin();
 }
 
+// KafkaJS 2.2.4 occasionally throws internal decoder errors like
+// "Cannot destructure property 'partitions' of 'high.pop(...)' as it is undefined"
+// when the broker returns an unexpected shape for OffsetFetch / ListOffsets responses.
+// Returning that raw stack to the UI is noise; keep the full error in logs and surface
+// a clean message instead.
+function sanitizeKafkaError(error) {
+  const msg = error?.message ? String(error.message) : String(error);
+  if (
+    msg.includes('high.pop') ||
+    msg.includes("Cannot destructure property 'partitions'") ||
+    msg.includes("Cannot read properties of undefined")
+  ) {
+    return 'KAFKA_RESPONSE_PARSE_ERROR';
+  }
+  return msg;
+}
+
 
 // Function to fetch Kafka cluster metadata
 async function getClusterMetadata() {
@@ -128,7 +145,7 @@ async function getClusterMetadata() {
     
     // Get topic details with message counts and consumer lag
     const topicMetadata = await Promise.all(
-      topics.slice(0, 20).map(async (topic) => { // Increased limit to 20 topics
+      topics.map(async (topic) => {
         try {
           const metadata = await admin.fetchTopicMetadata({ topics: [topic] });
           const offsets = await admin.fetchTopicOffsets(topic);
@@ -174,6 +191,13 @@ async function getClusterMetadata() {
               if (groupOffsets && groupOffsets.length > 0) {
                 const topicOffsets = groupOffsets.find(g => g.topic === topic);
                 if (topicOffsets && topicOffsets.partitions.length > 0) {
+                  // fetchOffsets returns an entry per partition even for groups that never
+                  // committed to this topic (offset === '-1'). Skip such groups so they don't
+                  // appear as attached consumers in the UI.
+                  const hasRealCommit = topicOffsets.partitions.some(p => (p.offset ?? '-1') !== '-1');
+                  if (!hasRealCommit) {
+                    continue;
+                  }
                   hasActiveConsumers = true;
                   let groupLag = 0;
                   
@@ -218,13 +242,16 @@ async function getClusterMetadata() {
                       };
                     }
                     
-                    // Add consumer offset info to partition details
-                    const partitionDetail = partitionDetails.find(p => p.partition === partition.partition);
-                    if (partitionDetail) {
-                      partitionDetail.consumerOffsets[group.groupId] = {
-                        currentOffset: rawCurrentOffset, // Keep original value (-1, 0, etc.)
-                        lag: lag
-                      };
+                    // Add consumer offset info to partition details. Skip partitions the
+                    // group has never committed to (-1) so the UI doesn't list it as attached.
+                    if (!hasNeverConsumed) {
+                      const partitionDetail = partitionDetails.find(p => p.partition === partition.partition);
+                      if (partitionDetail) {
+                        partitionDetail.consumerOffsets[group.groupId] = {
+                          currentOffset: rawCurrentOffset,
+                          lag: lag
+                        };
+                      }
                     }
                   }
                   
@@ -270,21 +297,21 @@ async function getClusterMetadata() {
             consumerGroupLag: consumerGroupInfo
           };
         } catch (error) {
-          console.error(`Error fetching metadata for topic ${topic}:`, error.message);
+          console.error(`Error fetching metadata for topic ${topic}:`, error);
           return {
             name: topic,
             partitions: 0,
             totalMessages: 0,
             remainingMessages: 0,
-            error: error.message
+            error: sanitizeKafkaError(error)
           };
         }
       })
     );
 
-    // Get consumer group details with member information (limit to first 10, already sorted)
+    // Get consumer group details with member information (already sorted)
     const groupDetails = await Promise.all(
-      sortedGroups.slice(0, 10).map(async (group) => {
+      sortedGroups.map(async (group) => {
         try {
           const description = await admin.describeGroups([group.groupId]);
           const groupInfo = description.groups[0];
@@ -316,10 +343,10 @@ async function getClusterMetadata() {
             };
           }
         } catch (error) {
-          console.error(`Error describing group ${group.groupId}:`, error.message);
+          console.error(`Error describing group ${group.groupId}:`, error);
           return {
             groupId: group.groupId,
-            error: error.message,
+            error: sanitizeKafkaError(error),
             members: [],
             memberCount: 0
           };
@@ -352,7 +379,7 @@ async function getClusterMetadata() {
     return statusCache;
   } catch (error) {
     console.error('Error fetching Kafka metadata:', error);
-    statusCache.error = error.message;
+    statusCache.error = sanitizeKafkaError(error);
     statusCache.lastUpdated = new Date().toISOString();
     throw error;
   } finally {

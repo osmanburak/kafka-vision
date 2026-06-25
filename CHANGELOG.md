@@ -5,6 +5,54 @@ All notable changes to the Kafka Status Monitor project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Change] - 2026-04-29
+
+### Changed
+- **Removed 20-topic and 10-consumer-group caps in dashboard payload** - `getClusterMetadata()` in `backend/server.js` was slicing the topic list to the first 20 entries and the consumer-group list to the first 10 before fetching details, so larger clusters never appeared in full on the dashboard. Both `slice()` calls are removed; every non-system topic and every non-viewer consumer group is now reported. Per-topic work (`fetchTopicMetadata` + `fetchTopicOffsets` + per-group `fetchOffsets`) still runs in parallel via `Promise.all`, so total wall-clock scales with the slowest broker round-trip rather than topic count, but on clusters with hundreds of topics expect the refresh interval to lengthen — raise `refreshRate` from the UI if needed.
+
+**Files Modified:**
+- `backend/server.js` (`topics.slice(0, 20)` → `topics`; `sortedGroups.slice(0, 10)` → `sortedGroups`)
+
+**Note:** The `/api/topics/:topicName` detail endpoint still limits the per-topic consumer-lag scan to 5 groups — that is a separate, narrower optimization unrelated to the dashboard list cap.
+
+## [Fix] - 2026-04-29
+
+### Fixed
+- **KafkaJS internal decoder errors leaking into the UI** - Errors like `Cannot destructure property 'partitions' of 'high.pop(...)' as it is undefined` (a known KafkaJS 2.2.4 parser bug on certain broker responses) were being returned verbatim as `topic.error` / `group.error` / `status.error` and rendered in the dashboard. The backend now sanitizes those messages to a sentinel (`KAFKA_RESPONSE_PARSE_ERROR`) — the full stack still goes to the backend log via `console.error`. The frontend translates the sentinel to a friendly bilingual message (`kafkaResponseParseError`).
+
+**Files Modified:**
+- `backend/server.js` (added `sanitizeKafkaError()` helper; applied at the three UI-facing error return sites)
+- `frontend/src/lib/i18n.ts` (new `kafkaResponseParseError` key, EN + TR)
+- `frontend/src/components/TopicDetails.tsx`, `frontend/src/components/ConsumerGroupDetails.tsx`, `frontend/src/app/page.tsx` (translate the sentinel before rendering)
+
+- **Phantom consumer groups attached to topics** - The dashboard listed consumer groups under topics they had never actually consumed. Root cause: `admin.fetchOffsets({ groupId, topics: [topic] })` returns one entry per partition even when the group has no committed offsets there (offset `-1`). `backend/server.js` was treating any non-empty response as "group attached" and writing every partition (including `-1`s) into `partitionDetails[].consumerOffsets`, which the frontend uses to enumerate attached groups. Now we skip a group entirely if it has no real commit on the topic, and skip per-partition entries where `currentOffset === -1`, so only groups with at least one real commit appear as rows.
+
+**Files Modified:**
+- `backend/server.js` (skip groups with no real commit on the topic; skip never-consumed partitions when populating `consumerOffsets`)
+
+**Impact:** Topics now show only the consumer groups that actually committed offsets to them. The per-(topic, group) row count drops accordingly, and the group dropdown / badge no longer surfaces unrelated groups.
+
+## [Feature] - 2026-04-24
+
+### Added
+- **Per-group topic rows with group-scoped partition details** - When a topic has multiple consumer groups attached, the topic list previously showed a single aggregated row and the partition table only displayed the "most active" group per partition, hiding how far behind other groups were. The topic list now emits one row per (topic, consumer group) pair. Each row's consumed/behind values and its partition detail drill-down are computed against that specific group (partition `current` and `lag` come from `consumerOffsets[groupId]`). Topics with no attached consumer groups still render as a single row. The `showBehindOnly` toggle now filters at row granularity, so a topic can appear once for a behind group and be hidden for a caught-up group. A purple pill next to the topic name shows the group id and state.
+
+**Files Modified:**
+- `frontend/src/components/TopicDetails.tsx` (new `groupId` / `groupState` props, group-scoped consumed/behind calculation, group-scoped partition rows, group badge in header)
+- `frontend/src/app/page.tsx` (expands `status.topics` into per-group rows, per-row lag calculation, row-level `showBehindOnly` filter)
+
+## [Fix] - 2026-02-26
+
+### Fixed
+- **Connection Manager "Add Connection" form not appearing** - The edit form for new connections was only rendered inside the existing connections loop, so it never displayed for a connection that hadn't been added yet. Added a dedicated form section that renders above the connection list when adding a new connection.
+- **Connection test stuck with no cancel option** - Test Connection had no timeout and the button was disabled during testing, so unreachable brokers caused it to hang forever. Added 15-second timeout via AbortController and made the button clickable during testing to cancel.
+- **Partition list not sorted** - Topic partition details now sort by partition number ascending.
+
+**Files Modified:**
+- `frontend/src/components/ConnectionManager.tsx`
+- `frontend/src/components/TopicDetails.tsx`
+- `frontend/src/lib/i18n.ts` (added `testCancelled`, `testTimeout` in EN/TR)
+
 ## [Docs] - 2025-12-29
 
 ### Added

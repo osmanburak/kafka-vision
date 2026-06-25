@@ -84,7 +84,9 @@ export function ConsumerGroupDetails({ group, language }: ConsumerGroupDetailsPr
       )}
       
       {group.error && (
-        <div className="text-xs text-red-500 mt-1">{group.error}</div>
+        <div className="text-xs text-red-500 mt-1">
+          {group.error === 'KAFKA_RESPONSE_PARSE_ERROR' ? t('kafkaResponseParseError') : group.error}
+        </div>
       )}
     </div>
   );

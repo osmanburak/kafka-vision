@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Server, Trash2, Edit2, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { useTranslation } from '@/lib/i18n';
 
@@ -37,6 +37,7 @@ export function ConnectionManager({
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
   const [isAdding, setIsAdding] = useState(false);
+  const testAbortControllerRef = useRef<AbortController | null>(null);
 
   // Load saved connections
   useEffect(() => {
@@ -98,7 +99,29 @@ export function ConnectionManager({
     saveConnections(updatedConnections);
   };
 
+  const handleCancelTest = () => {
+    if (testAbortControllerRef.current) {
+      testAbortControllerRef.current.abort();
+      testAbortControllerRef.current = null;
+    }
+    setTestingConnection(null);
+  };
+
   const handleTestConnection = async (connection: KafkaConnection) => {
+    // If already testing, cancel it
+    if (testingConnection === connection.id) {
+      handleCancelTest();
+      setTestResults(prev => ({
+        ...prev,
+        [connection.id]: { success: false, message: t('testCancelled') }
+      }));
+      return;
+    }
+
+    const abortController = new AbortController();
+    testAbortControllerRef.current = abortController;
+    const timeoutId = setTimeout(() => abortController.abort(), 15000);
+
     setTestingConnection(connection.id);
     setTestResults(prev => ({ ...prev, [connection.id]: { success: false, message: 'Testing...' } }));
 
@@ -107,11 +130,11 @@ export function ConnectionManager({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ brokers: connection.brokers })
+        body: JSON.stringify({ brokers: connection.brokers }),
+        signal: abortController.signal
       });
 
       if (!response.ok) {
-        // Handle authentication errors
         if (response.status === 401) {
           throw new Error('Authentication required - please refresh the page');
         }
@@ -127,16 +150,25 @@ export function ConnectionManager({
         }
       }));
     } catch (error) {
-      setTestResults(prev => ({
-        ...prev,
-        [connection.id]: {
-          success: false,
-          message: error instanceof Error ? error.message : 'Connection test failed'
-        }
-      }));
+      if (error instanceof Error && error.name === 'AbortError') {
+        setTestResults(prev => ({
+          ...prev,
+          [connection.id]: { success: false, message: t('testTimeout') }
+        }));
+      } else {
+        setTestResults(prev => ({
+          ...prev,
+          [connection.id]: {
+            success: false,
+            message: error instanceof Error ? error.message : 'Connection test failed'
+          }
+        }));
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      testAbortControllerRef.current = null;
+      setTestingConnection(null);
     }
-    
-    setTestingConnection(null);
   };
 
   const handleConnectTo = (connection: KafkaConnection) => {
@@ -191,6 +223,65 @@ export function ConnectionManager({
             <Plus size={20} />
             <span>{t('addConnection')}</span>
           </button>
+
+          {/* New Connection Form */}
+          {isAdding && editingConnection && (
+            <div className={`mb-4 p-4 rounded-lg border ${darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50'}`}>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={editingConnection.name}
+                  onChange={(e) => setEditingConnection({ ...editingConnection, name: e.target.value })}
+                  placeholder={t('connectionName')}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    darkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                />
+                <input
+                  type="text"
+                  value={editingConnection.brokers}
+                  onChange={(e) => setEditingConnection({ ...editingConnection, brokers: e.target.value })}
+                  placeholder={t('brokerAddresses')}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    darkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                />
+                <select
+                  value={editingConnection.label}
+                  onChange={(e) => setEditingConnection({ ...editingConnection, label: e.target.value })}
+                  className={`w-full px-3 py-2 rounded-lg border ${
+                    darkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="production">{t('production' as any)}</option>
+                  <option value="staging">{t('staging' as any)}</option>
+                  <option value="development">{t('development' as any)}</option>
+                  <option value="test">{t('test' as any)}</option>
+                  <option value="default">{t('default' as any)}</option>
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveConnection}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    {t('save')}
+                  </button>
+                  <button
+                    onClick={() => { setEditingConnection(null); setIsAdding(false); }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    {t('cancel')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Connection List */}
           <div className="space-y-4">
@@ -319,15 +410,19 @@ export function ConnectionManager({
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => handleTestConnection(connection)}
-                        disabled={testingConnection === connection.id}
-                        className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                          darkMode
-                            ? 'border-gray-600 hover:bg-gray-700 text-gray-300'
-                            : 'border-gray-300 hover:bg-gray-100 text-gray-700'
+                        className={`px-3 py-1.5 text-sm rounded-lg border transition-colors flex items-center gap-1.5 ${
+                          testingConnection === connection.id
+                            ? 'border-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-500'
+                            : darkMode
+                              ? 'border-gray-600 hover:bg-gray-700 text-gray-300'
+                              : 'border-gray-300 hover:bg-gray-100 text-gray-700'
                         }`}
                       >
                         {testingConnection === connection.id ? (
-                          <Loader className="animate-spin" size={16} />
+                          <>
+                            <Loader className="animate-spin" size={16} />
+                            {t('cancel')}
+                          </>
                         ) : (
                           t('testConnection')
                         )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info, Eye, Star, Send, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, Eye, Star, Send, Trash2, Users } from 'lucide-react';
 import { Topic } from '@/lib/types';
 import { Language, useTranslation } from '@/lib/i18n';
 import { MessageViewer } from './MessageViewer';
@@ -16,25 +16,60 @@ interface TopicDetailsProps {
   user?: any;
   authEnabled?: boolean;
   onDeleteTopic?: (topicName: string) => void;
+  groupId?: string;
+  groupState?: string;
 }
 
-export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite, user, authEnabled, onDeleteTopic }: TopicDetailsProps) {
+function computeGroupLagForPartition(
+  low: string,
+  high: string,
+  offsetInfo: { currentOffset: string; lag: number } | undefined
+): { lag: number; isEmpty: boolean; neverConsumed: boolean } {
+  const isEmpty = parseInt(low) === parseInt(high);
+  if (isEmpty) return { lag: 0, isEmpty: true, neverConsumed: false };
+  if (!offsetInfo) return { lag: parseInt(high) - parseInt(low), isEmpty: false, neverConsumed: true };
+  const neverConsumed = offsetInfo.currentOffset === '-1';
+  const lag = neverConsumed ? parseInt(high) - parseInt(low) : offsetInfo.lag;
+  return { lag, isEmpty: false, neverConsumed };
+}
+
+export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFavorite, user, authEnabled, onDeleteTopic, groupId, groupState }: TopicDetailsProps) {
   const [expanded, setExpanded] = useState(false);
   const [viewingMessages, setViewingMessages] = useState<{ partition: number; current: string; latest: string } | null>(null);
   const [showMessageComposer, setShowMessageComposer] = useState(false);
   const { t } = useTranslation(language);
-  
-  // Check if user is admin
+
   const isAdmin = user && (user.role === 'admin' || (user.isLocal && user.uid === 'admin'));
-  
+
+  // When a groupId is set, recompute consumed/behind/active against that group only.
+  const groupView = (() => {
+    if (!groupId || !topic.partitionDetails) return null;
+    let groupLag = 0;
+    let attachedPartitions = 0;
+    for (const p of topic.partitionDetails) {
+      const info = p.consumerOffsets?.[groupId];
+      if (info) attachedPartitions++;
+      const { lag } = computeGroupLagForPartition(p.low, p.high, info);
+      groupLag += lag;
+    }
+    const totalMessages = topic.totalMessages ?? 0;
+    const consumed = Math.max(0, totalMessages - groupLag);
+    return { groupLag, attachedPartitions, consumed };
+  })();
+
+  const displayedTotal = topic.totalMessages;
+  const displayedConsumed = groupView ? groupView.consumed : (topic.totalConsumed ?? Math.max(0, (topic.totalMessages || 0) - (topic.remainingMessages || 0)));
+  const displayedBehind = groupView ? groupView.groupLag : (topic.remainingMessages ?? 0);
+  const displayedHasActive = groupView ? true : topic.hasActiveConsumers;
+
   return (
     <div className="py-2 border-b border-gray-200 dark:border-gray-700 last:border-0">
-      <div 
+      <div
         className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 py-1 rounded transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
             {onToggleFavorite && (
               <button
                 onClick={(e) => {
@@ -47,29 +82,37 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
               </button>
             )}
             <span className="font-medium dark:text-gray-100">{topic.name}</span>
+            {groupId && (
+              <span
+                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 max-w-full truncate"
+                title={groupState ? `${groupId} · ${groupState}` : groupId}
+              >
+                <Users size={11} />
+                <span className="truncate">{groupId}</span>
+                {groupState && <span className="opacity-70">· {groupState}</span>}
+              </span>
+            )}
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
             {topic.partitions !== undefined && (
               <div>{t('partitions')}: {topic.partitions}</div>
             )}
-            {topic.totalMessages !== undefined && (
-              <div>{t('total')}: {topic.totalMessages.toLocaleString()}</div>
+            {displayedTotal !== undefined && (
+              <div>{t('total')}: {displayedTotal.toLocaleString()}</div>
             )}
-            {(topic.totalConsumed !== undefined || (topic.totalMessages !== undefined && topic.remainingMessages !== undefined)) && (
-              <div className="text-blue-600 dark:text-blue-400">
-                {t('consumed')}: {(topic.totalConsumed || Math.max(0, (topic.totalMessages || 0) - (topic.remainingMessages || 0))).toLocaleString()}
-              </div>
-            )}
-            {topic.hasActiveConsumers !== undefined && (
+            <div className="text-blue-600 dark:text-blue-400">
+              {t('consumed')}: {displayedConsumed.toLocaleString()}
+            </div>
+            {displayedHasActive !== undefined && (
               <div className={`font-medium ${
-                !topic.hasActiveConsumers ? 'text-gray-500 dark:text-gray-400' :
-                topic.remainingMessages === 0 ? 'text-green-600 dark:text-green-400' : 
-                (topic.remainingMessages || 0) > 1000000 ? 'text-red-600 dark:text-red-400' : 
+                !displayedHasActive ? 'text-gray-500 dark:text-gray-400' :
+                displayedBehind === 0 ? 'text-green-600 dark:text-green-400' :
+                displayedBehind > 1000000 ? 'text-red-600 dark:text-red-400' :
                 'text-yellow-600 dark:text-yellow-400'
               }`}>
-                {!topic.hasActiveConsumers ? `No ${t('consumer').toLowerCase()}s` :
-                 topic.remainingMessages === 0 ? `✓ ${t('caughtUp')}` : 
-                 `${(topic.remainingMessages || 0).toLocaleString()} ${t('behind')}`}
+                {!displayedHasActive ? `No ${t('consumer').toLowerCase()}s` :
+                 displayedBehind === 0 ? `✓ ${t('caughtUp')}` :
+                 `${displayedBehind.toLocaleString()} ${t('behind')}`}
               </div>
             )}
           </div>
@@ -104,7 +147,7 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </div>
-      
+
       {expanded && topic.partitionDetails && (
         <div className="mt-3 bg-gray-50 dark:bg-gray-800/50 rounded p-3">
           <div className="text-sm font-medium mb-2 flex items-center dark:text-gray-200">
@@ -112,7 +155,6 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
             {t('partition')} Details
           </div>
           <div className="space-y-2">
-            {/* Header */}
             <div className="text-xs font-medium grid grid-cols-8 gap-2 py-1 border-b border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">
               <div>{t('partition')}</div>
               <div>{t('low')}</div>
@@ -123,32 +165,32 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
               <div>{t('consumer')}</div>
               <div></div>
             </div>
-            
-            {/* Data rows */}
-            {topic.partitionDetails.map((partition) => {
-              // Get the most active consumer group (highest current offset) for this partition
-              const consumerInfo = partition.consumerOffsets ? 
-                Object.entries(partition.consumerOffsets).reduce<[string, any] | null>((mostActive, [groupId, offsetInfo]) => {
-                  if (!mostActive) return [groupId, offsetInfo];
+
+            {[...topic.partitionDetails].sort((a, b) => a.partition - b.partition).map((partition) => {
+              // If a specific groupId is set, show that group's offset. Otherwise fall back to the most active group.
+              let consumerInfo: [string, { currentOffset: string; lag: number }] | null = null;
+              if (groupId) {
+                const info = partition.consumerOffsets?.[groupId];
+                consumerInfo = info ? [groupId, info] : null;
+              } else if (partition.consumerOffsets) {
+                consumerInfo = Object.entries(partition.consumerOffsets).reduce<[string, { currentOffset: string; lag: number }] | null>((mostActive, [gid, offsetInfo]) => {
+                  if (!mostActive) return [gid, offsetInfo];
                   const currentOffset = parseInt(offsetInfo.currentOffset) || -1;
                   const mostActiveOffset = parseInt(mostActive[1].currentOffset) || -1;
-                  return currentOffset > mostActiveOffset ? [groupId, offsetInfo] : mostActive;
-                }, null) : null;
+                  return currentOffset > mostActiveOffset ? [gid, offsetInfo] : mostActive;
+                }, null);
+              }
+
               const rawCurrentOffset = consumerInfo ? consumerInfo[1].currentOffset : null;
               const currentOffset = rawCurrentOffset === '-1' ? t('noMessages') : (rawCurrentOffset || 'N/A');
               const consumerGroup = consumerInfo ? consumerInfo[0] : t('none');
-              
-              // Check if partition is empty (no messages in queue)
+
               const isEmptyPartition = parseInt(partition.low) === parseInt(partition.high);
               const messageCount = isEmptyPartition ? t('noMessages') : parseInt(partition.messages).toLocaleString();
-              
-              // Calculate lag: 
-              // - If partition is empty (low = high), lag = 0
-              // - If consumer has consumed, use the consumer's lag
-              // - If consumer never consumed (offset = -1) or no consumer, lag = total messages
+
               const hasNeverConsumed = rawCurrentOffset === '-1' || rawCurrentOffset === null;
               const lag = isEmptyPartition ? 0 : (consumerInfo && !hasNeverConsumed ? consumerInfo[1].lag : parseInt(partition.high) - parseInt(partition.low));
-              
+
               return (
                 <div key={partition.partition} className="text-sm grid grid-cols-8 gap-2 py-1 border-b border-gray-200 last:border-0">
                   <div className="font-medium">P{partition.partition}</div>
@@ -182,19 +224,21 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
             })}
           </div>
           <div className="text-xs text-gray-500 mt-2">
-            {t('total')} {t('messages').toLowerCase()}: {topic.totalMessages?.toLocaleString()} | 
-            {t('consumed')}: {(topic.totalConsumed || 0).toLocaleString()} | 
-            {t('status')}: {!topic.hasActiveConsumers ? `No active ${t('consumer').toLowerCase()}s` : 
-                     topic.remainingMessages === 0 ? `Fully ${t('caughtUp').toLowerCase()}` : 
-                     `${(topic.remainingMessages || 0).toLocaleString()} ${t('messages').toLowerCase()} ${t('behind')}`}
+            {t('total')} {t('messages').toLowerCase()}: {displayedTotal?.toLocaleString()} |
+            {t('consumed')}: {displayedConsumed.toLocaleString()} |
+            {t('status')}: {!displayedHasActive ? `No active ${t('consumer').toLowerCase()}s` :
+                     displayedBehind === 0 ? `Fully ${t('caughtUp').toLowerCase()}` :
+                     `${displayedBehind.toLocaleString()} ${t('messages').toLowerCase()} ${t('behind')}`}
           </div>
         </div>
       )}
-      
+
       {topic.error && (
-        <div className="text-sm text-red-500 mt-1">{topic.error}</div>
+        <div className="text-sm text-red-500 mt-1">
+          {topic.error === 'KAFKA_RESPONSE_PARSE_ERROR' ? t('kafkaResponseParseError') : topic.error}
+        </div>
       )}
-      
+
       {viewingMessages && (
         <MessageViewer
           topic={topic.name}
@@ -205,7 +249,7 @@ export function TopicDetails({ topic, language, darkMode, isFavorite, onToggleFa
           language={language}
         />
       )}
-      
+
       <MessageComposer
         isOpen={showMessageComposer}
         onClose={() => setShowMessageComposer(false)}
